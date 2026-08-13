@@ -1,4 +1,5 @@
 
+
 import os
 import uvicorn
 
@@ -7,7 +8,6 @@ from langserve import add_routes
 
 from langchain_core.tools import tool
 from langchain_core.runnables import RunnableLambda
-
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from pydantic import BaseModel, Field
@@ -41,7 +41,7 @@ llm = ChatGoogleGenerativeAI(
 class PDFInput(BaseModel):
 
     input: str = Field(
-        description="Resume text or PDF extracted text"
+        description="Resume text to analyze"
     )
 
 
@@ -52,27 +52,21 @@ class PDFInput(BaseModel):
 @tool
 def parse_resume(resume_text: str) -> str:
     """
-    Parse resume information from PDF text.
+    Parse resume information.
     """
-
-    print("=" * 50)
-    print("PDF PARSING TOOL CALLED")
-    print("RESUME RECEIVED")
-    print("=" * 50)
 
     prompt = f"""
 You are an AI Resume PDF Parsing Agent.
 
-Analyze the resume information below.
+Analyze the following resume:
 
-Resume:
 {resume_text}
 
-Extract the following information:
+Extract:
 
 1. Student Name
 2. Email
-3. Phone Number
+3. Phone
 4. Education
 5. Skills
 6. Programming Languages
@@ -87,85 +81,12 @@ Extract the following information:
 15. GitHub
 16. LinkedIn
 
-Rules:
+Do not invent information.
 
-- Do not invent information.
-- If information is missing, say "Not mentioned".
-- Keep technical names accurate.
-- Extract all important projects.
-- Extract all important skills.
+If information is missing, say:
+Not mentioned.
 
-Return the answer in this format:
-
-STUDENT INFORMATION
--------------------
-Name:
-Email:
-Phone:
-
-EDUCATION
----------
-Education:
-
-SKILLS
-------
-Skills:
-
-PROGRAMMING LANGUAGES
----------------------
-Languages:
-
-TECHNOLOGIES
-------------
-Technologies:
-
-FRAMEWORKS
-----------
-Frameworks:
-
-DATABASES
----------
-Databases:
-
-PROJECTS
---------
-Projects:
-
-INTERNSHIPS
------------
-Internships:
-
-WORK EXPERIENCE
----------------
-Experience:
-
-CERTIFICATIONS
---------------
-Certifications:
-
-ACHIEVEMENTS
-------------
-Achievements:
-
-GITHUB
-------
-GitHub URL:
-
-LINKEDIN
---------
-LinkedIn URL:
-
-KEYWORDS
---------
-Important keywords:
-
-RESUME SUMMARY
---------------
-Resume summary:
-
-CAREER PROFILE
---------------
-Suitable career roles:
+Return a clear structured answer.
 """
 
     response = llm.invoke(prompt)
@@ -174,15 +95,15 @@ Suitable career roles:
 
 
 # --------------------------------------------------
-# AGENT FUNCTION
+# AGENT
 # --------------------------------------------------
 
 def pdf_agent(data: PDFInput):
 
-    resume_text = data.input
+    print("PDF AGENT CALLED")
 
     result = parse_resume.invoke(
-        resume_text
+        data.input
     )
 
     return result
@@ -192,9 +113,7 @@ def pdf_agent(data: PDFInput):
 # CHAIN
 # --------------------------------------------------
 
-chain = RunnableLambda(
-    pdf_agent
-)
+chain = RunnableLambda(pdf_agent)
 
 
 # --------------------------------------------------
@@ -202,14 +121,12 @@ chain = RunnableLambda(
 # --------------------------------------------------
 
 app = FastAPI(
-    title="PDF Resume Parsing Agent",
-    description="AI PDF Resume Parsing Agent using Google Gemini",
-    version="1.0"
+    title="PDF Resume Parsing Agent"
 )
 
 
 # --------------------------------------------------
-# LANGSERVE
+# LANGSERVE ROUTE
 # --------------------------------------------------
 
 add_routes(
@@ -230,10 +147,7 @@ add_routes(
 def home():
 
     return {
-        "message": "PDF Resume Parsing Agent Running",
-        "agent": "PDF Parsing Agent",
-        "model": "Gemini 2.5 Flash",
-        "endpoint": "/pdf-agent"
+        "message": "PDF Resume Parsing Agent Running"
     }
 
 
@@ -245,9 +159,7 @@ def home():
 def health():
 
     return {
-        "status": "healthy",
-        "agent": "PDF Parsing Agent",
-        "gemini": "connected"
+        "status": "healthy"
     }
 
 
@@ -260,7 +172,7 @@ if __name__ == "__main__":
     port = int(
         os.environ.get(
             "PORT",
-            8001
+            8000
         )
     )
 
