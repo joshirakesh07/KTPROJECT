@@ -3,7 +3,6 @@
 import os
 import uvicorn
 import requests
-import json
 
 from fastapi import FastAPI
 from langserve import add_routes
@@ -37,73 +36,131 @@ llm = ChatGoogleGenerativeAI(
 
 
 # ==================================================
+# KT KNOWLEDGE
+# ==================================================
+
+KT_KNOWLEDGE = """
+
+You are KT, an AI Career Guidance Agent.
+
+Your purpose is to analyze information extracted from a student's
+resume PDF and provide practical career recommendations.
+
+You should analyze:
+
+- Education
+- Programming languages
+- Technical skills
+- Technologies
+- Frameworks
+- Databases
+- Projects
+- Internships
+- Certifications
+- Achievements
+- GitHub
+- LinkedIn
+- Career objective or target role
+
+CAREER READINESS:
+
+Beginner:
+Basic knowledge with little practical work.
+
+Developing:
+Relevant skills with some projects or coursework.
+
+Job Ready:
+Good technical foundation with relevant projects or experience.
+
+Strong Candidate:
+Strong skills, projects, experience and portfolio.
+
+Do not treat this as an official hiring decision.
+
+SKILL GAP:
+
+Compare the student's existing skills with the requirements
+of their target career.
+
+Identify:
+- Existing skills
+- Strong skills
+- Missing skills
+- Skills that need improvement
+- High-priority skills
+- Recommended learning order
+
+PROJECTS:
+
+Recommend practical projects that match the student's target
+role and skill gaps.
+
+Projects should:
+- Solve a real problem
+- Use relevant technologies
+- Demonstrate practical skills
+- Be suitable for a college student
+- Be useful for GitHub
+- Be explainable in an interview
+
+GITHUB:
+
+Analyze the GitHub information if it is available.
+
+Recommend:
+- Better README files
+- Screenshots
+- Architecture diagrams
+- Better repository names
+- Project documentation
+- Clean source code
+- Project demonstrations
+- Removal of unnecessary repositories
+
+Never expose or request API keys, passwords or private credentials.
+
+JOB SEARCH:
+
+Recommend suitable:
+- Fresher jobs
+- Internships
+- Graduate roles
+- Entry-level positions
+- Junior positions
+
+Do not invent current job openings.
+
+FINAL SYNTHESIS:
+
+The final recommendation should contain:
+
+1. Career Readiness
+2. Strong Skills
+3. Skill Gaps
+4. Best Project Recommendation
+5. Suitable Job Roles
+6. Job Search Direction
+7. GitHub Improvements
+8. 30-Day Action Plan
+9. Final Career Recommendation
+
+Always distinguish between:
+- Skills the student already has
+- Skills the student needs to learn
+- Actions the student should take next.
+
+"""
+
+
+# ==================================================
 # INPUT MODEL
 # ==================================================
 
 class AgentInput(BaseModel):
 
-    student_name: str = Field(
-        description="Student name"
-    )
-
-    email: str = Field(
-        default="Not mentioned"
-    )
-
-    phone: str = Field(
-        default="Not mentioned"
-    )
-
-    education: str = Field(
-        default="Not mentioned"
-    )
-
-    skills: list[str] = Field(
-        default=[]
-    )
-
-    programming_languages: list[str] = Field(
-        default=[]
-    )
-
-    technologies: list[str] = Field(
-        default=[]
-    )
-
-    frameworks: list[str] = Field(
-        default=[]
-    )
-
-    databases: list[str] = Field(
-        default=[]
-    )
-
-    projects: list[str] = Field(
-        default=[]
-    )
-
-    internships: list[str] = Field(
-        default=[]
-    )
-
-    certifications: list[str] = Field(
-        default=[]
-    )
-
-    achievements: list[str] = Field(
-        default=[]
-    )
-
-    github: str = Field(
-        default=""
-    )
-
-    linkedin: str = Field(
-        default=""
-    )
-
-    target_role: str = Field(
-        default="AI/ML Engineer"
+    input: str = Field(
+        description="Information extracted by the PDF Agent"
     )
 
 
@@ -112,46 +169,40 @@ class AgentInput(BaseModel):
 # ==================================================
 
 @tool
-def job_search(role: str) -> str:
+def job_search(student_information: str) -> str:
     """
-    Find suitable job and internship opportunities
-    for the student's target role.
+    Recommend suitable jobs and internships based on
+    the student's resume information.
     """
 
     print("=" * 60)
     print("JOB SEARCH TOOL")
-    print("ROLE:", role)
     print("=" * 60)
 
     prompt = f"""
 You are a job search assistant.
 
-Target role:
-{role}
+Student information:
 
-Find suitable opportunities for:
+{student_information}
 
-- Freshers
-- Entry-level candidates
+Based on the student's skills, education, projects
+and career objective, identify suitable job categories.
+
+Focus on:
+- Fresher jobs
 - Internships
+- Entry-level jobs
 - Graduate roles
+- Junior positions
 
-Focus on India.
+Provide:
+1. Suitable job titles
+2. Required skills
+3. Why the student fits
+4. Skills that need improvement
 
-Provide useful job-search recommendations.
-
-Include:
-1. Job title
-2. Company if known
-3. Required skills
-4. Experience
-5. Location
-6. Application/source link if available
-
-IMPORTANT:
-Do not invent current job openings.
-If live job information is unavailable, provide
-search directions instead.
+Do NOT invent specific current vacancies.
 """
 
     response = llm.invoke(prompt)
@@ -164,43 +215,37 @@ search directions instead.
 # ==================================================
 
 @tool
-def analyze_skill_gap(
-    resume_information: str,
-    target_role: str
-) -> str:
+def skill_gap(student_information: str) -> str:
     """
-    Compare the student's skills with the target role.
+    Identify skill gaps from the student's resume.
     """
 
     print("=" * 60)
     print("SKILL GAP TOOL")
-    print("TARGET ROLE:", target_role)
     print("=" * 60)
 
     prompt = f"""
-You are an AI career skill-gap analyzer.
+You are a career skill-gap analyzer.
 
-Target role:
-{target_role}
+Student information:
 
-Student resume information:
-{resume_information}
+{student_information}
 
-Analyze the student.
+Analyze the student's current skills.
 
 Identify:
 
-1. Current skills
-2. Matching skills
+1. Existing skills
+2. Strong skills
 3. Missing skills
 4. Skills that need improvement
 5. High-priority skills
 6. Recommended learning order
 
-Do not claim that the student has skills
-that are not present in the provided information.
+Do not invent skills.
+Only use information available in the student data.
 
-Give practical recommendations.
+{KT_KNOWLEDGE}
 """
 
     response = llm.invoke(prompt)
@@ -214,12 +259,12 @@ Give practical recommendations.
 
 @tool
 def project_recommendation(
-    target_role: str,
-    skill_gap: str
+    student_information: str,
+    skill_gap_result: str
 ) -> str:
     """
-    Recommend portfolio projects based on the
-    student's target role and skill gaps.
+    Recommend projects based on the student's
+    career goal and skill gaps.
     """
 
     print("=" * 60)
@@ -229,11 +274,13 @@ def project_recommendation(
     prompt = f"""
 You are a technical project mentor.
 
-Target role:
-{target_role}
+Student information:
+
+{student_information}
 
 Skill gap:
-{skill_gap}
+
+{skill_gap_result}
 
 Recommend 5 practical projects.
 
@@ -245,9 +292,11 @@ For each project provide:
 4. Main features
 5. Skills demonstrated
 6. Difficulty
-7. Why it helps for the target role
+7. Why it helps the student's career
 
 Projects should be realistic for a B.Tech student.
+
+{KT_KNOWLEDGE}
 """
 
     response = llm.invoke(prompt)
@@ -260,29 +309,60 @@ Projects should be realistic for a B.Tech student.
 # ==================================================
 
 @tool
-def github_check(username: str) -> str:
+def github_check(student_information: str) -> str:
     """
-    Analyze a student's public GitHub repositories.
+    Analyze the GitHub profile mentioned in the
+    student's PDF information.
     """
 
     print("=" * 60)
-    print("GITHUB TOOL")
-    print("USERNAME:", username)
+    print("GITHUB CHECK TOOL")
     print("=" * 60)
 
-    if not username:
+    prompt = f"""
+Find the GitHub username or GitHub URL from this
+student information:
 
-        return "GitHub username was not provided."
+{student_information}
 
-    username = username.strip()
+If no GitHub information is present, return:
+
+GitHub information not available.
+
+Otherwise return ONLY the GitHub username.
+"""
+
+    response = llm.invoke(prompt)
+
+    username = response.content.strip()
+
+    if (
+        "not available" in username.lower()
+        or "not mentioned" in username.lower()
+    ):
+        return "GitHub information not available."
+
+
+    # ------------------------------------------------
+    # Extract username
+    # ------------------------------------------------
 
     if "github.com/" in username:
 
-        username = username.rstrip(
-            "/"
-        ).split(
+        username = username.split(
             "github.com/"
         )[-1]
+
+    username = username.strip(
+        "/ \n"
+    )
+
+    username = username.split()[0]
+
+
+    # ------------------------------------------------
+    # GitHub API
+    # ------------------------------------------------
 
     url = f"https://api.github.com/users/{username}/repos"
 
@@ -312,13 +392,13 @@ def github_check(username: str) -> str:
 
         if not repositories:
 
-            return "No public repositories found."
+            return "GitHub profile found but no public repositories."
 
-        repo_information = []
+        result = []
 
         for repo in repositories:
 
-            repo_information.append({
+            result.append({
                 "name": repo.get("name"),
                 "description": repo.get("description"),
                 "language": repo.get("language"),
@@ -330,14 +410,10 @@ def github_check(username: str) -> str:
                     "forks_count",
                     0
                 ),
-                "url": repo.get("html_url"),
-                "updated": repo.get("updated_at")
+                "url": repo.get("html_url")
             })
 
-        return json.dumps(
-            repo_information,
-            indent=2
-        )
+        return str(result)
 
     except Exception as e:
 
@@ -345,65 +421,44 @@ def github_check(username: str) -> str:
 
 
 # ==================================================
-# KT AGENT CORE
+# KT AGENT
 # ==================================================
 
-def career_agent(data: AgentInput):
+def kt_agent(data: AgentInput):
 
     print("=" * 60)
     print("KT CAREER AGENT")
     print("=" * 60)
 
-    # ------------------------------------------------
-    # Convert PDF Agent information to text
-    # ------------------------------------------------
-
-    resume_information = json.dumps(
-        {
-            "student_name": data.student_name,
-            "email": data.email,
-            "phone": data.phone,
-            "education": data.education,
-            "skills": data.skills,
-            "programming_languages":
-                data.programming_languages,
-            "technologies": data.technologies,
-            "frameworks": data.frameworks,
-            "databases": data.databases,
-            "projects": data.projects,
-            "internships": data.internships,
-            "certifications": data.certifications,
-            "achievements": data.achievements,
-            "github": data.github,
-            "linkedin": data.linkedin
-        },
-        indent=2
-    )
-
-    target_role = data.target_role
+    student_information = data.input
 
 
-    # ------------------------------------------------
-    # INITIAL PROFILE ANALYSIS
-    # ------------------------------------------------
+    # =================================================
+    # PROFILE ANALYSIS
+    # =================================================
 
     profile_prompt = f"""
-You are the main KT Career Agent.
+You are KT, an AI Career Advisor.
 
-Analyze this structured resume information.
+Analyze this information extracted from a student's
+resume PDF:
 
-Resume:
-{resume_information}
+{student_information}
 
-Target Role:
-{target_role}
+Identify:
 
-Give a short profile analysis containing:
+1. Education
+2. Current technical skills
+3. Projects
+4. Experience
+5. Certifications
+6. Career objective
+7. GitHub information
+8. Possible career direction
 
-1. Student profile
-2. Strongest skills
-3. Relevant projects
-4. Current career readiness
+Do not invent information.
+
+{KT_KNOWLEDGE}
 """
 
     profile = llm.invoke(
@@ -411,135 +466,151 @@ Give a short profile analysis containing:
     ).content
 
 
-    # ------------------------------------------------
-    # JOB SEARCH TOOL
-    # ------------------------------------------------
+    # =================================================
+    # JOB SEARCH
+    # =================================================
 
     jobs = job_search.invoke(
-        target_role
+        student_information
     )
 
 
-    # ------------------------------------------------
-    # SKILL GAP TOOL
-    # ------------------------------------------------
+    # =================================================
+    # SKILL GAP
+    # =================================================
 
-    skill_gap = analyze_skill_gap.invoke(
-        {
-            "resume_information":
-                resume_information,
-
-            "target_role":
-                target_role
-        }
+    gaps = skill_gap.invoke(
+        student_information
     )
 
 
-    # ------------------------------------------------
-    # PROJECT TOOL
-    # ------------------------------------------------
+    # =================================================
+    # PROJECTS
+    # =================================================
 
     projects = project_recommendation.invoke(
         {
-            "target_role":
-                target_role,
+            "student_information":
+                student_information,
 
-            "skill_gap":
-                skill_gap
+            "skill_gap_result":
+                gaps
         }
     )
 
 
-    # ------------------------------------------------
-    # GITHUB TOOL
-    # ------------------------------------------------
+    # =================================================
+    # GITHUB
+    # =================================================
 
     github = github_check.invoke(
-        data.github
+        student_information
     )
 
 
-    # ------------------------------------------------
+    # =================================================
     # FINAL SYNTHESIS
-    # ------------------------------------------------
+    # =================================================
 
     final_prompt = f"""
-You are the Final KT Career Advisor.
+You are KT, the final AI Career Advisor.
 
 Use the following information.
 
-================================
-STUDENT
-================================
+========================================
+STUDENT PDF INFORMATION
+========================================
 
-{resume_information}
-
-Target Role:
-{target_role}
+{student_information}
 
 
-================================
+========================================
 PROFILE ANALYSIS
-================================
+========================================
 
 {profile}
 
 
-================================
+========================================
 JOB SEARCH
-================================
+========================================
 
 {jobs}
 
 
-================================
+========================================
 SKILL GAP
-================================
+========================================
 
-{skill_gap}
+{gaps}
 
 
-================================
+========================================
 PROJECT RECOMMENDATIONS
-================================
+========================================
 
 {projects}
 
 
-================================
-GITHUB
-================================
+========================================
+GITHUB ANALYSIS
+========================================
 
 {github}
 
 
-================================
+========================================
 FINAL TASK
-================================
+========================================
 
-Create a practical career recommendation.
+Create a final career recommendation.
 
-Include:
+Use this structure:
 
-1. Career Readiness
-2. Strong Skills
-3. Skill Gaps
-4. Best Project to Build
-5. Suitable Job Roles
-6. Job Search Direction
-7. GitHub Improvements
-8. 30-Day Action Plan
-9. Final Recommendation
+CAREER READINESS
+----------------
+Give Beginner / Developing / Job Ready /
+Strong Candidate and explain why.
 
+STRONG SKILLS
+-------------
+List the strongest existing skills.
+
+SKILL GAPS
+----------
+List the most important missing skills.
+
+BEST PROJECT TO BUILD
+---------------------
+Recommend the single best project.
+
+SUITABLE JOB ROLES
+------------------
+List suitable roles.
+
+JOB SEARCH DIRECTION
+--------------------
+Explain what types of jobs/internships to target.
+
+GITHUB IMPROVEMENTS
+-------------------
+Give specific GitHub improvements.
+
+30-DAY ACTION PLAN
+------------------
+Week 1:
+Week 2:
+Week 3:
+Week 4:
+
+FINAL RECOMMENDATION
+--------------------
+Give the most important next step.
+
+IMPORTANT:
 Do not invent information.
-
-Clearly separate:
-- What the student already has
-- What the student needs to learn
-- What the student should do next
-
-Keep the answer practical and suitable
-for a college student/fresher.
+Clearly distinguish existing skills from recommended skills.
+Keep the answer practical for a college student or fresher.
 """
 
     final_result = llm.invoke(
@@ -547,44 +618,19 @@ for a college student/fresher.
     ).content
 
 
-    # ------------------------------------------------
+    # =================================================
     # RETURN
-    # ------------------------------------------------
+    # =================================================
 
-    return {
-
-        "student_name":
-            data.student_name,
-
-        "target_role":
-            target_role,
-
-        "profile_analysis":
-            profile,
-
-        "job_search":
-            jobs,
-
-        "skill_gap":
-            skill_gap,
-
-        "project_recommendations":
-            projects,
-
-        "github_analysis":
-            github,
-
-        "final_synthesis":
-            final_result
-    }
+    return final_result
 
 
 # ==================================================
-# LANGCHAIN CHAIN
+# CHAIN
 # ==================================================
 
 chain = RunnableLambda(
-    career_agent
+    kt_agent
 )
 
 
@@ -593,15 +639,9 @@ chain = RunnableLambda(
 # ==================================================
 
 app = FastAPI(
-
     title="KT AI Career Agent",
-
-    description=(
-        "Career Agent that receives structured "
-        "PDF Agent information"
-    ),
-
-    version="2.0"
+    description="KT Career Agent using PDF Agent information",
+    version="1.0"
 )
 
 
@@ -610,15 +650,11 @@ app = FastAPI(
 # ==================================================
 
 add_routes(
-
     app,
-
     chain.with_types(
         input_type=AgentInput
     ),
-
     path="/agent",
-
     playground_type="default"
 )
 
@@ -631,23 +667,12 @@ add_routes(
 def home():
 
     return {
-
         "status": "running",
-
-        "message":
-            "KT AI Career Agent Running",
-
-        "input":
-            "Structured PDF Agent Information",
-
-        "model":
-            "gemini-2.5-flash",
-
-        "endpoint":
-            "/agent",
-
-        "playground":
-            "/agent/playground/"
+        "agent": "KT Career Agent",
+        "input": "PDF Agent output",
+        "model": "gemini-2.5-flash",
+        "endpoint": "/agent",
+        "playground": "/agent/playground/"
     }
 
 
@@ -659,14 +684,8 @@ def home():
 def health():
 
     return {
-
         "status": "healthy",
-
-        "agent":
-            "KT Career Agent",
-
-        "gemini":
-            "connected"
+        "agent": "KT Career Agent"
     }
 
 
@@ -678,18 +697,8 @@ def health():
 def test():
 
     return {
-
-        "message":
-            "KT Career Agent is working",
-
-        "input":
-            "PDF Agent structured information",
-
-        "endpoint":
-            "/agent",
-
-        "playground":
-            "/agent/playground/"
+        "message": "KT Agent is working",
+        "input": "PDF Agent information"
     }
 
 
