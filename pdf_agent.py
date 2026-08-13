@@ -2,6 +2,8 @@
 
 import os
 import uvicorn
+import requests
+import json
 
 from fastapi import FastAPI
 from langserve import add_routes
@@ -13,9 +15,9 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 
 
-# --------------------------------------------------
+# ==================================================
 # GOOGLE API KEY
-# --------------------------------------------------
+# ==================================================
 
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
 
@@ -23,9 +25,9 @@ if not GOOGLE_API_KEY:
     raise ValueError("GOOGLE_API_KEY is not set")
 
 
-# --------------------------------------------------
+# ==================================================
 # GEMINI
-# --------------------------------------------------
+# ==================================================
 
 llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-flash",
@@ -34,143 +36,122 @@ llm = ChatGoogleGenerativeAI(
 )
 
 
-# --------------------------------------------------
+# ==================================================
 # INPUT MODEL
-# --------------------------------------------------
+# ==================================================
 
 class AgentInput(BaseModel):
-    input: str = Field(
-        description="Resume text to analyze"
+
+    student_name: str = Field(
+        description="Student name"
+    )
+
+    email: str = Field(
+        default="Not mentioned"
+    )
+
+    phone: str = Field(
+        default="Not mentioned"
+    )
+
+    education: str = Field(
+        default="Not mentioned"
+    )
+
+    skills: list[str] = Field(
+        default=[]
+    )
+
+    programming_languages: list[str] = Field(
+        default=[]
+    )
+
+    technologies: list[str] = Field(
+        default=[]
+    )
+
+    frameworks: list[str] = Field(
+        default=[]
+    )
+
+    databases: list[str] = Field(
+        default=[]
+    )
+
+    projects: list[str] = Field(
+        default=[]
+    )
+
+    internships: list[str] = Field(
+        default=[]
+    )
+
+    certifications: list[str] = Field(
+        default=[]
+    )
+
+    achievements: list[str] = Field(
+        default=[]
+    )
+
+    github: str = Field(
+        default=""
+    )
+
+    linkedin: str = Field(
+        default=""
+    )
+
+    target_role: str = Field(
+        default="AI/ML Engineer"
     )
 
 
-# --------------------------------------------------
-# PDF / RESUME PARSING TOOL
-# --------------------------------------------------
+# ==================================================
+# TOOL 1 - JOB SEARCH
+# ==================================================
 
 @tool
-def parse_resume(resume_text: str) -> str:
+def job_search(role: str) -> str:
     """
-    Parse resume information and extract important
-    student career information.
+    Find suitable job and internship opportunities
+    for the student's target role.
     """
 
     print("=" * 60)
-    print("PDF PARSING TOOL CALLED")
+    print("JOB SEARCH TOOL")
+    print("ROLE:", role)
     print("=" * 60)
 
     prompt = f"""
-You are an AI Resume PDF Parsing Agent.
+You are a job search assistant.
 
-Analyze the following resume:
+Target role:
+{role}
 
-{resume_text}
+Find suitable opportunities for:
 
-Extract the following information:
+- Freshers
+- Entry-level candidates
+- Internships
+- Graduate roles
 
-1. Student Name
-2. Email
-3. Phone Number
-4. Education
-5. Skills
-6. Programming Languages
-7. Technologies
-8. Frameworks
-9. Databases
-10. Tools
-11. Projects
-12. Internships
-13. Work Experience
-14. Certifications
-15. Achievements
-16. GitHub URL
-17. LinkedIn URL
+Focus on India.
 
-Rules:
+Provide useful job-search recommendations.
 
-- Do not invent information.
-- If information is missing, write "Not mentioned".
-- Keep technical terms accurate.
-- Extract all important projects.
-- Extract all important skills.
-- Give a short resume summary.
-- Suggest suitable career areas based only on the resume.
+Include:
+1. Job title
+2. Company if known
+3. Required skills
+4. Experience
+5. Location
+6. Application/source link if available
 
-Return the answer in this format:
-
-STUDENT INFORMATION
--------------------
-Name:
-Email:
-Phone:
-
-EDUCATION
----------
-Education:
-
-SKILLS
-------
-Skills:
-
-PROGRAMMING LANGUAGES
----------------------
-Languages:
-
-TECHNOLOGIES
-------------
-Technologies:
-
-FRAMEWORKS
-----------
-Frameworks:
-
-DATABASES
----------
-Databases:
-
-TOOLS
------
-Tools:
-
-PROJECTS
---------
-Projects:
-
-INTERNSHIPS
------------
-Internships:
-
-WORK EXPERIENCE
----------------
-Experience:
-
-CERTIFICATIONS
---------------
-Certifications:
-
-ACHIEVEMENTS
-------------
-Achievements:
-
-GITHUB
-------
-GitHub URL:
-
-LINKEDIN
---------
-LinkedIn URL:
-
-KEYWORDS
---------
-Important keywords:
-
-RESUME SUMMARY
---------------
-Resume summary:
-
-CAREER PROFILE
---------------
-Suitable career roles:
+IMPORTANT:
+Do not invent current job openings.
+If live job information is unavailable, provide
+search directions instead.
 """
 
     response = llm.invoke(prompt)
@@ -178,114 +159,543 @@ Suitable career roles:
     return response.content
 
 
-# --------------------------------------------------
-# AGENT FUNCTION
-# --------------------------------------------------
+# ==================================================
+# TOOL 2 - SKILL GAP
+# ==================================================
 
-def resume_agent(data: AgentInput):
+@tool
+def analyze_skill_gap(
+    resume_information: str,
+    target_role: str
+) -> str:
+    """
+    Compare the student's skills with the target role.
+    """
 
     print("=" * 60)
-    print("RESUME AGENT")
+    print("SKILL GAP TOOL")
+    print("TARGET ROLE:", target_role)
     print("=" * 60)
 
-    resume_text = data.input
+    prompt = f"""
+You are an AI career skill-gap analyzer.
 
-    result = parse_resume.invoke(
-        resume_text
+Target role:
+{target_role}
+
+Student resume information:
+{resume_information}
+
+Analyze the student.
+
+Identify:
+
+1. Current skills
+2. Matching skills
+3. Missing skills
+4. Skills that need improvement
+5. High-priority skills
+6. Recommended learning order
+
+Do not claim that the student has skills
+that are not present in the provided information.
+
+Give practical recommendations.
+"""
+
+    response = llm.invoke(prompt)
+
+    return response.content
+
+
+# ==================================================
+# TOOL 3 - PROJECT RECOMMENDATION
+# ==================================================
+
+@tool
+def project_recommendation(
+    target_role: str,
+    skill_gap: str
+) -> str:
+    """
+    Recommend portfolio projects based on the
+    student's target role and skill gaps.
+    """
+
+    print("=" * 60)
+    print("PROJECT RECOMMENDATION TOOL")
+    print("=" * 60)
+
+    prompt = f"""
+You are a technical project mentor.
+
+Target role:
+{target_role}
+
+Skill gap:
+{skill_gap}
+
+Recommend 5 practical projects.
+
+For each project provide:
+
+1. Project title
+2. Problem statement
+3. Technologies
+4. Main features
+5. Skills demonstrated
+6. Difficulty
+7. Why it helps for the target role
+
+Projects should be realistic for a B.Tech student.
+"""
+
+    response = llm.invoke(prompt)
+
+    return response.content
+
+
+# ==================================================
+# TOOL 4 - GITHUB CHECK
+# ==================================================
+
+@tool
+def github_check(username: str) -> str:
+    """
+    Analyze a student's public GitHub repositories.
+    """
+
+    print("=" * 60)
+    print("GITHUB TOOL")
+    print("USERNAME:", username)
+    print("=" * 60)
+
+    if not username:
+
+        return "GitHub username was not provided."
+
+    username = username.strip()
+
+    if "github.com/" in username:
+
+        username = username.rstrip(
+            "/"
+        ).split(
+            "github.com/"
+        )[-1]
+
+    url = f"https://api.github.com/users/{username}/repos"
+
+    try:
+
+        response = requests.get(
+            url,
+            params={
+                "sort": "updated",
+                "per_page": 10
+            },
+            timeout=15
+        )
+
+        if response.status_code == 404:
+
+            return "GitHub user not found."
+
+        if response.status_code != 200:
+
+            return (
+                "GitHub API error: "
+                + str(response.status_code)
+            )
+
+        repositories = response.json()
+
+        if not repositories:
+
+            return "No public repositories found."
+
+        repo_information = []
+
+        for repo in repositories:
+
+            repo_information.append({
+                "name": repo.get("name"),
+                "description": repo.get("description"),
+                "language": repo.get("language"),
+                "stars": repo.get(
+                    "stargazers_count",
+                    0
+                ),
+                "forks": repo.get(
+                    "forks_count",
+                    0
+                ),
+                "url": repo.get("html_url"),
+                "updated": repo.get("updated_at")
+            })
+
+        return json.dumps(
+            repo_information,
+            indent=2
+        )
+
+    except Exception as e:
+
+        return f"GitHub check failed: {str(e)}"
+
+
+# ==================================================
+# KT AGENT CORE
+# ==================================================
+
+def career_agent(data: AgentInput):
+
+    print("=" * 60)
+    print("KT CAREER AGENT")
+    print("=" * 60)
+
+    # ------------------------------------------------
+    # Convert PDF Agent information to text
+    # ------------------------------------------------
+
+    resume_information = json.dumps(
+        {
+            "student_name": data.student_name,
+            "email": data.email,
+            "phone": data.phone,
+            "education": data.education,
+            "skills": data.skills,
+            "programming_languages":
+                data.programming_languages,
+            "technologies": data.technologies,
+            "frameworks": data.frameworks,
+            "databases": data.databases,
+            "projects": data.projects,
+            "internships": data.internships,
+            "certifications": data.certifications,
+            "achievements": data.achievements,
+            "github": data.github,
+            "linkedin": data.linkedin
+        },
+        indent=2
     )
 
-    return result
+    target_role = data.target_role
 
 
-# --------------------------------------------------
+    # ------------------------------------------------
+    # INITIAL PROFILE ANALYSIS
+    # ------------------------------------------------
+
+    profile_prompt = f"""
+You are the main KT Career Agent.
+
+Analyze this structured resume information.
+
+Resume:
+{resume_information}
+
+Target Role:
+{target_role}
+
+Give a short profile analysis containing:
+
+1. Student profile
+2. Strongest skills
+3. Relevant projects
+4. Current career readiness
+"""
+
+    profile = llm.invoke(
+        profile_prompt
+    ).content
+
+
+    # ------------------------------------------------
+    # JOB SEARCH TOOL
+    # ------------------------------------------------
+
+    jobs = job_search.invoke(
+        target_role
+    )
+
+
+    # ------------------------------------------------
+    # SKILL GAP TOOL
+    # ------------------------------------------------
+
+    skill_gap = analyze_skill_gap.invoke(
+        {
+            "resume_information":
+                resume_information,
+
+            "target_role":
+                target_role
+        }
+    )
+
+
+    # ------------------------------------------------
+    # PROJECT TOOL
+    # ------------------------------------------------
+
+    projects = project_recommendation.invoke(
+        {
+            "target_role":
+                target_role,
+
+            "skill_gap":
+                skill_gap
+        }
+    )
+
+
+    # ------------------------------------------------
+    # GITHUB TOOL
+    # ------------------------------------------------
+
+    github = github_check.invoke(
+        data.github
+    )
+
+
+    # ------------------------------------------------
+    # FINAL SYNTHESIS
+    # ------------------------------------------------
+
+    final_prompt = f"""
+You are the Final KT Career Advisor.
+
+Use the following information.
+
+================================
+STUDENT
+================================
+
+{resume_information}
+
+Target Role:
+{target_role}
+
+
+================================
+PROFILE ANALYSIS
+================================
+
+{profile}
+
+
+================================
+JOB SEARCH
+================================
+
+{jobs}
+
+
+================================
+SKILL GAP
+================================
+
+{skill_gap}
+
+
+================================
+PROJECT RECOMMENDATIONS
+================================
+
+{projects}
+
+
+================================
+GITHUB
+================================
+
+{github}
+
+
+================================
+FINAL TASK
+================================
+
+Create a practical career recommendation.
+
+Include:
+
+1. Career Readiness
+2. Strong Skills
+3. Skill Gaps
+4. Best Project to Build
+5. Suitable Job Roles
+6. Job Search Direction
+7. GitHub Improvements
+8. 30-Day Action Plan
+9. Final Recommendation
+
+Do not invent information.
+
+Clearly separate:
+- What the student already has
+- What the student needs to learn
+- What the student should do next
+
+Keep the answer practical and suitable
+for a college student/fresher.
+"""
+
+    final_result = llm.invoke(
+        final_prompt
+    ).content
+
+
+    # ------------------------------------------------
+    # RETURN
+    # ------------------------------------------------
+
+    return {
+
+        "student_name":
+            data.student_name,
+
+        "target_role":
+            target_role,
+
+        "profile_analysis":
+            profile,
+
+        "job_search":
+            jobs,
+
+        "skill_gap":
+            skill_gap,
+
+        "project_recommendations":
+            projects,
+
+        "github_analysis":
+            github,
+
+        "final_synthesis":
+            final_result
+    }
+
+
+# ==================================================
 # LANGCHAIN CHAIN
-# --------------------------------------------------
+# ==================================================
 
 chain = RunnableLambda(
-    resume_agent
+    career_agent
 )
 
 
-# --------------------------------------------------
+# ==================================================
 # FASTAPI
-# --------------------------------------------------
+# ==================================================
 
 app = FastAPI(
-    title="AI Resume PDF Parsing Agent",
-    description="Resume Parsing Agent using Google Gemini",
-    version="1.0"
+
+    title="KT AI Career Agent",
+
+    description=(
+        "Career Agent that receives structured "
+        "PDF Agent information"
+    ),
+
+    version="2.0"
 )
 
 
-# --------------------------------------------------
+# ==================================================
 # LANGSERVE
-# --------------------------------------------------
-# IMPORTANT:
-# This creates:
-# /agent/invoke
-# /agent/batch
-# /agent/stream
-# /agent/playground/
-# --------------------------------------------------
+# ==================================================
 
 add_routes(
+
     app,
+
     chain.with_types(
         input_type=AgentInput
     ),
+
     path="/agent",
+
     playground_type="default"
 )
 
 
-# --------------------------------------------------
+# ==================================================
 # HOME
-# --------------------------------------------------
+# ==================================================
 
 @app.get("/")
 def home():
 
     return {
+
         "status": "running",
-        "message": "AI Resume PDF Parsing Agent Running",
-        "agent": "PDF Parsing Agent",
-        "model": "gemini-2.5-flash",
-        "langserve_endpoint": "/agent",
-        "playground": "/agent/playground/"
+
+        "message":
+            "KT AI Career Agent Running",
+
+        "input":
+            "Structured PDF Agent Information",
+
+        "model":
+            "gemini-2.5-flash",
+
+        "endpoint":
+            "/agent",
+
+        "playground":
+            "/agent/playground/"
     }
 
 
-# --------------------------------------------------
-# HEALTH CHECK
-# --------------------------------------------------
+# ==================================================
+# HEALTH
+# ==================================================
 
 @app.get("/health")
 def health():
 
     return {
+
         "status": "healthy",
-        "agent": "PDF Parsing Agent",
-        "gemini": "connected"
+
+        "agent":
+            "KT Career Agent",
+
+        "gemini":
+            "connected"
     }
 
 
-# --------------------------------------------------
+# ==================================================
 # TEST
-# --------------------------------------------------
+# ==================================================
 
 @app.get("/test")
 def test():
 
     return {
-        "message": "PDF Parsing Agent is working",
-        "endpoint": "/agent",
-        "playground": "/agent/playground/"
+
+        "message":
+            "KT Career Agent is working",
+
+        "input":
+            "PDF Agent structured information",
+
+        "endpoint":
+            "/agent",
+
+        "playground":
+            "/agent/playground/"
     }
 
 
-# --------------------------------------------------
+# ==================================================
 # MAIN
-# --------------------------------------------------
+# ==================================================
 
 if __name__ == "__main__":
 
