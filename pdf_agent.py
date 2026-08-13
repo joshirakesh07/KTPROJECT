@@ -38,22 +38,26 @@ llm = ChatGoogleGenerativeAI(
 # INPUT MODEL
 # --------------------------------------------------
 
-class PDFInput(BaseModel):
-
+class AgentInput(BaseModel):
     input: str = Field(
         description="Resume text to analyze"
     )
 
 
 # --------------------------------------------------
-# TOOL
+# PDF / RESUME PARSING TOOL
 # --------------------------------------------------
 
 @tool
 def parse_resume(resume_text: str) -> str:
     """
-    Parse resume information.
+    Parse resume information and extract important
+    student career information.
     """
+
+    print("=" * 60)
+    print("PDF PARSING TOOL CALLED")
+    print("=" * 60)
 
     prompt = f"""
 You are an AI Resume PDF Parsing Agent.
@@ -62,31 +66,111 @@ Analyze the following resume:
 
 {resume_text}
 
-Extract:
+Extract the following information:
 
 1. Student Name
 2. Email
-3. Phone
+3. Phone Number
 4. Education
 5. Skills
 6. Programming Languages
 7. Technologies
 8. Frameworks
 9. Databases
-10. Projects
-11. Internships
-12. Work Experience
-13. Certifications
-14. Achievements
-15. GitHub
-16. LinkedIn
+10. Tools
+11. Projects
+12. Internships
+13. Work Experience
+14. Certifications
+15. Achievements
+16. GitHub URL
+17. LinkedIn URL
 
-Do not invent information.
+Rules:
 
-If information is missing, say:
-Not mentioned.
+- Do not invent information.
+- If information is missing, write "Not mentioned".
+- Keep technical terms accurate.
+- Extract all important projects.
+- Extract all important skills.
+- Give a short resume summary.
+- Suggest suitable career areas based only on the resume.
 
-Return a clear structured answer.
+Return the answer in this format:
+
+STUDENT INFORMATION
+-------------------
+Name:
+Email:
+Phone:
+
+EDUCATION
+---------
+Education:
+
+SKILLS
+------
+Skills:
+
+PROGRAMMING LANGUAGES
+---------------------
+Languages:
+
+TECHNOLOGIES
+------------
+Technologies:
+
+FRAMEWORKS
+----------
+Frameworks:
+
+DATABASES
+---------
+Databases:
+
+TOOLS
+-----
+Tools:
+
+PROJECTS
+--------
+Projects:
+
+INTERNSHIPS
+-----------
+Internships:
+
+WORK EXPERIENCE
+---------------
+Experience:
+
+CERTIFICATIONS
+--------------
+Certifications:
+
+ACHIEVEMENTS
+------------
+Achievements:
+
+GITHUB
+------
+GitHub URL:
+
+LINKEDIN
+--------
+LinkedIn URL:
+
+KEYWORDS
+--------
+Important keywords:
+
+RESUME SUMMARY
+--------------
+Resume summary:
+
+CAREER PROFILE
+--------------
+Suitable career roles:
 """
 
     response = llm.invoke(prompt)
@@ -95,25 +179,31 @@ Return a clear structured answer.
 
 
 # --------------------------------------------------
-# AGENT
+# AGENT FUNCTION
 # --------------------------------------------------
 
-def pdf_agent(data: PDFInput):
+def resume_agent(data: AgentInput):
 
-    print("PDF AGENT CALLED")
+    print("=" * 60)
+    print("RESUME AGENT")
+    print("=" * 60)
+
+    resume_text = data.input
 
     result = parse_resume.invoke(
-        data.input
+        resume_text
     )
 
     return result
 
 
 # --------------------------------------------------
-# CHAIN
+# LANGCHAIN CHAIN
 # --------------------------------------------------
 
-chain = RunnableLambda(pdf_agent)
+chain = RunnableLambda(
+    resume_agent
+)
 
 
 # --------------------------------------------------
@@ -121,20 +211,29 @@ chain = RunnableLambda(pdf_agent)
 # --------------------------------------------------
 
 app = FastAPI(
-    title="PDF Resume Parsing Agent"
+    title="AI Resume PDF Parsing Agent",
+    description="Resume Parsing Agent using Google Gemini",
+    version="1.0"
 )
 
 
 # --------------------------------------------------
-# LANGSERVE ROUTE
+# LANGSERVE
+# --------------------------------------------------
+# IMPORTANT:
+# This creates:
+# /agent/invoke
+# /agent/batch
+# /agent/stream
+# /agent/playground/
 # --------------------------------------------------
 
 add_routes(
     app,
     chain.with_types(
-        input_type=PDFInput
+        input_type=AgentInput
     ),
-    path="/pdf-agent",
+    path="/agent",
     playground_type="default"
 )
 
@@ -147,19 +246,40 @@ add_routes(
 def home():
 
     return {
-        "message": "PDF Resume Parsing Agent Running"
+        "status": "running",
+        "message": "AI Resume PDF Parsing Agent Running",
+        "agent": "PDF Parsing Agent",
+        "model": "gemini-2.5-flash",
+        "langserve_endpoint": "/agent",
+        "playground": "/agent/playground/"
     }
 
 
 # --------------------------------------------------
-# HEALTH
+# HEALTH CHECK
 # --------------------------------------------------
 
 @app.get("/health")
 def health():
 
     return {
-        "status": "healthy"
+        "status": "healthy",
+        "agent": "PDF Parsing Agent",
+        "gemini": "connected"
+    }
+
+
+# --------------------------------------------------
+# TEST
+# --------------------------------------------------
+
+@app.get("/test")
+def test():
+
+    return {
+        "message": "PDF Parsing Agent is working",
+        "endpoint": "/agent",
+        "playground": "/agent/playground/"
     }
 
 
