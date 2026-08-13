@@ -1,22 +1,15 @@
-
-
 import os
+import io
 import uvicorn
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from langserve import add_routes
-
-from langchain_core.runnables import RunnableLambda
 from langchain_google_genai import ChatGoogleGenerativeAI
-
-from pydantic import BaseModel, Field
-
-from pypdf import PdfReader
+from pydantic import BaseModel
 
 
-# ============================================================
-# GOOGLE API KEY
-# ============================================================
+# ==================================================
+# GOOGLE API
+# ==================================================
 
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
 
@@ -24,9 +17,9 @@ if not GOOGLE_API_KEY:
     raise ValueError("GOOGLE_API_KEY is missing")
 
 
-# ============================================================
+# ==================================================
 # GEMINI
-# ============================================================
+# ==================================================
 
 llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-flash",
@@ -35,194 +28,149 @@ llm = ChatGoogleGenerativeAI(
 )
 
 
-# ============================================================
+# ==================================================
+# KT KNOWLEDGE
+# ==================================================
+
+KT_KNOWLEDGE = """
+You are KT, an AI Career Guidance Agent.
+
+Analyze the student's resume information.
+
+Identify:
+- Education
+- Skills
+- Programming languages
+- Technologies
+- Projects
+- Internships
+- Certifications
+- GitHub
+
+Determine career readiness.
+
+Identify important skill gaps.
+
+Recommend suitable fresher jobs and internships.
+
+Recommend one practical project.
+
+Suggest GitHub improvements.
+
+Create a practical 30-day career plan.
+
+Give one clear final recommendation.
+
+Use only information provided in the resume.
+Do not invent qualifications or experience.
+"""
+
+
+# ==================================================
 # INPUT MODEL
-# ============================================================
+# ==================================================
 
 class AgentInput(BaseModel):
-
-    input: str = Field(
-        description="Resume information extracted from PDF"
-    )
+    input: str
 
 
-# ============================================================
-# PDF TEXT EXTRACTION
-# ============================================================
+# ==================================================
+# KT FUNCTION
+# ==================================================
 
-def extract_pdf_text(file):
-
-    try:
-
-        reader = PdfReader(file)
-
-        text = ""
-
-        for page in reader.pages:
-
-            page_text = page.extract_text()
-
-            if page_text:
-                text += page_text + "\n"
-
-        if not text.strip():
-
-            raise ValueError(
-                "No readable text found in PDF"
-            )
-
-        return text
-
-    except Exception as e:
-
-        raise HTTPException(
-            status_code=400,
-            detail=f"PDF reading error: {str(e)}"
-        )
-
-
-# ============================================================
-# KT CAREER AGENT
-# ============================================================
-
-def kt_agent(data: AgentInput):
-
-    print("=" * 60)
-    print("KT AGENT STARTED")
-    print("=" * 60)
-
-    resume_text = data.input
+def run_kt(resume_text: str):
 
     prompt = f"""
+{KT_KNOWLEDGE}
 
-You are KT, an AI Career Agent.
-
-The following information was extracted
-from a student's PDF resume.
-
-================ RESUME =================
+========================
+RESUME INFORMATION
+========================
 
 {resume_text}
 
-===========================================
+========================
+OUTPUT
+========================
 
-Analyze the student's resume.
+Give the result in this format:
 
-Provide the following:
+CAREER READINESS:
+...
 
-1. Career Readiness
-   - Give a short assessment of the student's
-     current career readiness.
+STRONG SKILLS:
+...
 
-2. Education
-   - Identify the education information.
+SKILL GAPS:
+...
 
-3. Strong Skills
-   - List the strongest technical skills.
+SUITABLE JOB ROLES:
+...
 
-4. Skill Gaps
-   - Identify important missing skills
-     based on the student's current profile.
+RECOMMENDED PROJECT:
+...
 
-5. Suitable Job Roles
-   - Recommend suitable fresher and
-     entry-level job roles.
+GITHUB IMPROVEMENTS:
+...
 
-6. Project Recommendation
-   - Recommend ONE practical project
-     that will improve the student's profile.
+30-DAY PLAN:
+...
 
-7. GitHub Improvement
-   - Suggest improvements to the GitHub
-     profile and repositories if GitHub
-     information is available.
-
-8. Internship / Job Recommendation
-   - Suggest what type of internships
-     or jobs the student should target.
-
-9. 30-Day Career Plan
-   - Give a simple 30-day action plan.
-
-10. Final Recommendation
-   - Give the single most valuable next
-     action for the student.
-
-IMPORTANT RULES:
-
-- Use only information available in the resume.
-- Do not invent qualifications.
-- Clearly say "Not mentioned" when information
-  is unavailable.
-- Keep the recommendations practical.
-- Prioritize the most valuable next action.
-- Do not give a long unrelated list.
-
+FINAL RECOMMENDATION:
+...
 """
 
-    print("SENDING REQUEST TO GEMINI...")
+    print("Calling Gemini...")
+
+    response = llm.invoke(prompt)
+
+    print("Gemini completed.")
+
+    return response.content
+
+
+# ==================================================
+# FASTAPI
+# ==================================================
+
+app = FastAPI(
+    title="KT Career Agent"
+)
+
+
+# ==================================================
+# SIMPLE JSON ENDPOINT
+# ==================================================
+
+@app.post("/agent")
+def agent(data: AgentInput):
 
     try:
 
-        response = llm.invoke(prompt)
+        result = run_kt(data.input)
 
-        print("GEMINI RESPONSE RECEIVED")
-
-        return response.content
+        return {
+            "output": result
+        }
 
     except Exception as e:
 
-        print("GEMINI ERROR:", str(e))
+        print("ERROR:", str(e))
 
-        return {
-            "error": str(e)
-        }
-
-
-# ============================================================
-# LANGCHAIN CHAIN
-# ============================================================
-
-chain = RunnableLambda(kt_agent)
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
 
 
-# ============================================================
-# FASTAPI
-# ============================================================
-
-app = FastAPI(
-    title="KT PDF Career Agent",
-    description="PDF Resume Parser and KT Career Analysis Agent"
-)
-
-
-# ============================================================
-# LANGSERVE ROUTE
-# ============================================================
-
-add_routes(
-    app,
-    chain.with_types(
-        input_type=AgentInput
-    ),
-    path="/agent",
-    playground_type="default"
-)
-
-
-# ============================================================
-# PDF UPLOAD ENDPOINT
-# ============================================================
+# ==================================================
+# PDF ENDPOINT
+# ==================================================
 
 @app.post("/analyze-pdf")
 async def analyze_pdf(
     file: UploadFile = File(...)
 ):
-
-    print("=" * 60)
-    print("PDF RECEIVED")
-    print("FILE:", file.filename)
-    print("=" * 60)
 
     if not file.filename.lower().endswith(".pdf"):
 
@@ -235,40 +183,43 @@ async def analyze_pdf(
 
         pdf_bytes = await file.read()
 
-        import io
-
         pdf_file = io.BytesIO(pdf_bytes)
 
-        # --------------------------------------------
-        # Extract PDF text
-        # --------------------------------------------
+        from pypdf import PdfReader
 
-        resume_text = extract_pdf_text(
-            pdf_file
-        )
+        reader = PdfReader(pdf_file)
 
-        print("PDF TEXT EXTRACTED")
-        print("TEXT LENGTH:", len(resume_text))
+        text = ""
 
-        # --------------------------------------------
-        # Send to KT Agent
-        # --------------------------------------------
+        for page in reader.pages:
 
-        result = kt_agent(
-            AgentInput(
-                input=resume_text
+            page_text = page.extract_text()
+
+            if page_text:
+                text += page_text + "\n"
+
+        if not text.strip():
+
+            raise HTTPException(
+                status_code=400,
+                detail="No readable text found in PDF"
             )
-        )
+
+        result = run_kt(text)
 
         return {
-            "filename": file.filename,
             "status": "success",
-            "career_analysis": result
+            "filename": file.filename,
+            "output": result
         }
+
+    except HTTPException:
+
+        raise
 
     except Exception as e:
 
-        print("PDF AGENT ERROR:", str(e))
+        print("PDF ERROR:", str(e))
 
         raise HTTPException(
             status_code=500,
@@ -276,38 +227,36 @@ async def analyze_pdf(
         )
 
 
-# ============================================================
+# ==================================================
 # HOME
-# ============================================================
+# ==================================================
 
 @app.get("/")
 def home():
 
     return {
         "status": "running",
-        "agent": "KT PDF Career Agent",
-        "pdf_endpoint": "/analyze-pdf",
-        "text_endpoint": "/agent",
-        "playground": "/agent/playground/"
+        "agent": "KT Career Agent",
+        "agent_endpoint": "/agent",
+        "pdf_endpoint": "/analyze-pdf"
     }
 
 
-# ============================================================
-# HEALTH CHECK
-# ============================================================
+# ==================================================
+# HEALTH
+# ==================================================
 
 @app.get("/health")
 def health():
 
     return {
-        "status": "healthy",
-        "agent": "KT PDF Career Agent"
+        "status": "healthy"
     }
 
 
-# ============================================================
+# ==================================================
 # MAIN
-# ============================================================
+# ==================================================
 
 if __name__ == "__main__":
 
